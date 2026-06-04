@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart'; 
+import 'firebase_options.dart';
 import 'screens/auth/login_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // 👈 ¡Cambiado de 'FirebaseCore' a 'Firebase'! Esto quita el error de la captura
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
   runApp(const MyApp());
 }
 
@@ -12,12 +21,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'EduKids App',
-      debugShowCheckedModeBanner: false, // Quita la etiqueta roja de debug
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.blue,
-        fontFamily: 'Roboto', // O la fuente que use tu entorno
+        primarySwatch: Colors.orange,
+        useMaterial3: true,
       ),
-      home: const LoginScreen(), // Establece la pantalla inicial
+      home: const LoginScreen(), 
     );
   }
 }

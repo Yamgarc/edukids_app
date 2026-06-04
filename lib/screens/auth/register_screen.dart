@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -10,122 +10,128 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _auth = FirebaseAuth.instance;
   bool _isLoading = false;
 
-  Future<void> _registerUser() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() { _isLoading = true; });
-      try {
-        // 1. Crear el usuario en Firebase Authentication
-        UserCredential userCredential = await FirebaseAuth.instance
-            .createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
-
-        // 2. Guardar datos adicionales del niño en Cloud Firestore
-        await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
-          'uid': userCredential.user!.uid,
-          'nombreNino': _nameController.text.trim(),
-          'correoTutor': _emailController.text.trim(),
-          'estrellas': 0,
-          'nivelActual': 1,
-          'fechaRegistro': DateTime.now(),
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(backgroundColor: Colors.green, content: Text('¡Cuenta de EduKids creada con éxito! 🎉')),
-        );
-        Navigator.pop(context);
-      } on FirebaseAuthException catch (e) {
-        String mensaje = 'Ocurrió un error al registrarse.';
-        if (e.code == 'email-already-in-use') mensaje = 'Este correo ya está registrado.';
-        if (e.code == 'weak-password') mensaje = 'La contraseña es muy débil.';
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: Colors.red, content: Text(mensaje)),
-        );
-      } finally {
-        setState(() { _isLoading = false; });
-      }
+  void _registrarUsuario() async {
+    if (_emailController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) {
+      _mostrarAlerta('Por favor, rellena todos los campos');
+      return;
     }
+
+    if (_passwordController.text.trim().length < 6) {
+      _mostrarAlerta('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Registro en Firebase Authentication
+      await _auth.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: Colors.green, content: Text('¡Cuenta creada con éxito! 🎉')),
+        );
+        // Redirige directo a la aplicación
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String mensajeError = 'Error al registrar usuario';
+      if (e.code == 'email-already-in-use') {
+        mensajeError = 'Este correo ya está registrado en otra cuenta.';
+      } else if (e.code == 'invalid-email') {
+        mensajeError = 'El formato del correo electrónico no sirve.';
+      } else if (e.code == 'weak-password') {
+        mensajeError = 'La contraseña elegida es muy débil.';
+      }
+      _mostrarAlerta(mensajeError);
+    } catch (e) {
+      _mostrarAlerta('Error: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _mostrarAlerta(String mensaje) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(backgroundColor: Colors.redAccent, content: Text(mensaje)),
+    );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.lightBlue[100],
+      backgroundColor: Colors.deepPurple[50],
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, iconTheme: const IconThemeData(color: Colors.deepPurple)),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-            elevation: 8,
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.face, size: 80, color: Colors.orange),
-                    const SizedBox(height: 10),
-                    const Text(
-                      '¡Regístrate en EduKids!',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue),
-                    ),
-                    const SizedBox(height: 20),
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: InputDecoration(
-                        labelText: 'Nombre del Pequeño',
-                        prefixIcon: const Icon(Icons.person),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
-                      ),
-                      validator: (value) => value!.isEmpty ? 'Por favor escribe tu nombre' : null,
-                    ),
-                    const SizedBox(height: 15),
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: InputDecoration(
-                        labelText: 'Correo del Tutor',
-                        prefixIcon: const Icon(Icons.email),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
-                      ),
-                      validator: (value) => value!.isEmpty ? 'Ingresa un correo válido' : null,
-                    ),
-                    const SizedBox(height: 15),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'Contraseña Secreta',
-                        prefixIcon: const Icon(Icons.lock),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
-                      ),
-                      validator: (value) => value!.length < 6 ? 'La contraseña debe tener al menos 6 letras' : null,
-                    ),
-                    const SizedBox(height: 25),
-                    _isLoading
-                        ? const CircularProgressIndicator()
-                        : ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            ),
-                            onPressed: _registerUser,
-                            child: const Text('¡Empezar Aventura!', style: TextStyle(fontSize: 18, color: Colors.white)),
-                          ),
-                  ],
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('📝 Crear Cuenta', style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+              const SizedBox(height: 10),
+              const Text('¡Únete a la aventura de EduKids!', style: TextStyle(fontSize: 16, color: Colors.grey)),
+              const SizedBox(height: 40),
+              
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'Correo Electrónico',
+                  prefixIcon: const Icon(Icons.email),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                  fillColor: Colors.white,
+                  filled: true,
                 ),
               ),
-            ),
+              const SizedBox(height: 20),
+              
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'Contraseña (mínimo 6 letras/números)',
+                  prefixIcon: const Icon(Icons.lock),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                  fillColor: Colors.white,
+                  filled: true,
+                ),
+              ),
+              const SizedBox(height: 35),
+              
+              _isLoading
+                  ? const CircularProgressIndicator(color: Colors.deepPurple)
+                  : SizedBox(
+                      width: double.infinity,
+                      height: 55,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        ),
+                        onPressed: _registrarUsuario,
+                        child: const Text('Registrarme e Iniciar ✨', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+            ],
           ),
         ),
       ),
